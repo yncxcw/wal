@@ -27,10 +27,20 @@ func TestOpenWLogAndWrite(t *testing.T) {
 	defer DestryWLog(log)
 	assert.Nil(t, err)
 
-	_, err = log.Write([]byte("hello"))
+	logPostion, err := log.Write([]byte("hello"))
 	assert.Nil(t, err)
+	assert.Equal(t, uint64(0), logPostion.id)
+	assert.Equal(t, uint64(0), logPostion.segmentIndex)
+	// The segment header is 8 bytes
+	assert.Equal(t, uint64(8), logPostion.logOffset)
+	assert.Equal(t, uint32(5), logPostion.logSize)
 
-	_, err = log.Write([]byte("world"))
+	logPostion, err = log.Write([]byte("world!"))
 	assert.Nil(t, err)
+	assert.Equal(t, uint64(1), logPostion.id)
+	assert.Equal(t, uint64(0), logPostion.segmentIndex)
+	// The segment header + log header + 5
+	assert.Equal(t, uint64(21), logPostion.logOffset)
+	assert.Equal(t, uint32(6), logPostion.logSize)
 
 }

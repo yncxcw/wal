@@ -178,14 +178,15 @@ func NewSegment(segmentFolder string, segmentId uint64, logStartIndex uint64, fs
 	}
 
 	return &Segment{
-		path:            segmentPath,
-		id:              segmentId,
-		fd:              fd,
-		header:          make([]byte, SegHeaderSize),
-		logStartIndex:   logStartIndex,
-		logCurrentIndex: logStartIndex,
-		size:            0,
-		fsync:           fsync,
+		path:             segmentPath,
+		id:               segmentId,
+		fd:               fd,
+		header:           make([]byte, SegHeaderSize),
+		logStartIndex:    logStartIndex,
+		logCurrentIndex:  logStartIndex,
+		logCurrentOffset: SegHeaderSize,
+		size:             0,
+		fsync:            fsync,
 	}, nil
 }
 
@@ -344,6 +345,7 @@ func (seg *Segment) Sync() error {
 	}
 	return seg.fd.Sync()
 }
+
 func (seg *Segment) Close() error {
 	if seg.closed {
 		return ErrClosed
@@ -378,11 +380,12 @@ func (seg *Segment) WriteBuffer(buffer []byte) error {
 func (seg *Segment) Write(data []byte) (*LogPosition, error) {
 	// Write the log
 	buffer := make([]byte, logHeaderSize)
-	WriteSingleLog(buffer, data)
+	buffer = WriteSingleLog(buffer, data)
 	err := seg.WriteBuffer(buffer)
 	if err != nil {
 		return nil, err
 	}
+
 	// Update stats
 	defer func() {
 		seg.logCurrentIndex += 1
@@ -403,7 +406,7 @@ func (seg *Segment) Read(logIndex uint64, checkCRC bool) ([]byte, error) {
 		return nil, ErrClosed
 	}
 	var logCurrentIndex = seg.logStartIndex
-	var logCurrentOffset uint64 = 0
+	var logCurrentOffset uint64 = SegHeaderSize
 	for {
 		log, err := seg.readSingLog(logCurrentOffset, checkCRC)
 		if err != nil {
@@ -443,11 +446,12 @@ func (seg *Segment) readSingLog(logOffset uint64, checkCRC bool) ([]byte, error)
 }
 
 // Append data to buffer with header
-func WriteSingleLog(buffer []byte, data []byte) {
+func WriteSingleLog(buffer []byte, data []byte) []byte {
 	sum := crc32.ChecksumIEEE(data)
 	binary.LittleEndian.PutUint32(buffer, sum)
 	binary.LittleEndian.PutUint32(buffer, uint32(len(data)))
 	buffer = append(buffer, data...)
+	return buffer
 }
 
 //Return the segment Path.
