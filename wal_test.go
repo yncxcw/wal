@@ -14,7 +14,7 @@ func DestryWLog(log *WLog) {
 	}
 }
 
-func TestOpenWLogAndWrite(t *testing.T) {
+func CraeteWLog() *WLog {
 	log_folder, _ := os.MkdirTemp("", "log_folder")
 	opts := Options{
 		DirPath:          log_folder,
@@ -23,9 +23,13 @@ func TestOpenWLogAndWrite(t *testing.T) {
 		SegmentCacheSize: 1 * MB,
 		BytesToSync:      500 * KB,
 	}
-	log, err := Open(opts)
+	log, _ := Open(opts)
+	return log
+}
+
+func TestOpenWLogAndWrite(t *testing.T) {
+	log := CraeteWLog()
 	defer DestryWLog(log)
-	assert.Nil(t, err)
 
 	logPostion, err := log.Write([]byte("hello"))
 	assert.Nil(t, err)
@@ -42,5 +46,21 @@ func TestOpenWLogAndWrite(t *testing.T) {
 	// The segment header + log header + 5
 	assert.Equal(t, uint64(21), logPostion.logOffset)
 	assert.Equal(t, uint32(6), logPostion.logSize)
+}
 
+func TestWLogWriteAndRead(t *testing.T) {
+	log := CraeteWLog()
+	defer DestryWLog(log)
+
+	var str = "abcdefg"
+	for i := 1; i < len(str); i++ {
+		_, err := log.Write([]byte(str[:i]))
+		assert.Nil(t, err)
+	}
+
+	for i := 1; i < len(str); i++ {
+		buffer, err := log.Read(uint64(i - 1))
+		assert.Nil(t, err)
+		assert.Equal(t, str[:i], string(buffer))
+	}
 }

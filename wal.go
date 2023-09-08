@@ -13,7 +13,7 @@ import (
 
 const (
 	// 8 bytes for the header size.
-	// Checksum | Length  | data
+	// Length | Checksum  | data
 	//    4          4       ...
 	logHeaderSize = 8
 
@@ -36,6 +36,7 @@ const (
 var (
 	ErrClosed = errors.New("The segment is closed.")
 	ErrCRC    = errors.New("The CRC missmatch error.")
+	ErrNilLog = errors.New("Loading Empty log.")
 )
 
 type Options struct {
@@ -379,8 +380,7 @@ func (seg *Segment) WriteBuffer(buffer []byte) error {
 
 func (seg *Segment) Write(data []byte) (*LogPosition, error) {
 	// Write the log
-	buffer := make([]byte, logHeaderSize)
-	buffer = WriteSingleLog(buffer, data)
+	buffer := WriteSingleLog(data)
 	err := seg.WriteBuffer(buffer)
 	if err != nil {
 		return nil, err
@@ -413,9 +413,13 @@ func (seg *Segment) Read(logIndex uint64, checkCRC bool) ([]byte, error) {
 			return nil, err
 		}
 		if logCurrentIndex == logIndex {
+			if len(log) == 0 {
+				return nil, ErrNilLog
+			}
 			return log, nil
 		}
 		logCurrentIndex += 1
+		logCurrentOffset += uint64(logHeaderSize + len(log))
 	}
 }
 
@@ -426,8 +430,8 @@ func (seg *Segment) readSingLog(logOffset uint64, checkCRC bool) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	logSize := binary.LittleEndian.Uint32(logHeader[4:])
-	logCRC := binary.LittleEndian.Uint32(logHeader[:4])
+	logSize := binary.LittleEndian.Uint32(logHeader[:4])
+	logCRC := binary.LittleEndian.Uint32(logHeader[4:])
 
 	// Read log message.
 	buffer := make([]byte, logSize)
@@ -446,10 +450,11 @@ func (seg *Segment) readSingLog(logOffset uint64, checkCRC bool) ([]byte, error)
 }
 
 // Append data to buffer with header
-func WriteSingleLog(buffer []byte, data []byte) []byte {
+func WriteSingleLog(data []byte) []byte {
+	buffer := make([]byte, logHeaderSize)
 	sum := crc32.ChecksumIEEE(data)
-	binary.LittleEndian.PutUint32(buffer, sum)
-	binary.LittleEndian.PutUint32(buffer, uint32(len(data)))
+	binary.LittleEndian.PutUint32(buffer[0:4], uint32(len(data)))
+	binary.LittleEndian.PutUint32(buffer[4:], sum)
 	buffer = append(buffer, data...)
 	return buffer
 }
