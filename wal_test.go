@@ -52,7 +52,7 @@ func TestWLogWriteAndRead(t *testing.T) {
 	log := CraeteWLog()
 	defer DestryWLog(log)
 
-	var str = "abcdefg"
+	var str = "abcdefghijklmnopq"
 	for i := 1; i < len(str); i++ {
 		_, err := log.Write([]byte(str[:i]))
 		assert.Nil(t, err)
