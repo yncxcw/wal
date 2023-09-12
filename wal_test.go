@@ -98,7 +98,7 @@ func TestWLogWriteAndReOpen(t *testing.T) {
 	log, err := Open(opts)
 	assert.Nil(t, err)
 
-	assert.Equal(t, uint64(50), log.GetCurrentLogIndex())
+	assert.Equal(t, uint64(50), log.GetLogCount())
 	for i := 0; i < 50; i++ {
 		_, err := log.Read(uint64(i))
 		assert.Nil(t, err)
@@ -132,7 +132,7 @@ func TestMultipleSegments(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		_, err := log.Read(uint64(i))
 		assert.Nil(t, err)
-		assert.LessOrEqual(t, uint64(i), log.GetCurrentLogIndex())
+		assert.LessOrEqual(t, uint64(i), log.GetLogCount())
 	}
 }
 
@@ -154,7 +154,7 @@ func TestMultipleReaderAndWriter(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	assert.Equal(t, uint64(200), log.GetCurrentLogIndex())
+	assert.Equal(t, uint64(200), log.GetLogCount())
 
 	// Reading goroutins
 	for i := 0; i < 20; i++ {
@@ -196,6 +196,7 @@ func TestWLogIteratorE2E(t *testing.T) {
 		assert.Equal(t, expectedLogIndex, logIndex)
 		expectedLogIndex++
 	}
+	assert.Equal(t, log.GetLogCount(), expectedLogIndex)
 
 }
 

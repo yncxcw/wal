@@ -57,11 +57,13 @@ type Options struct {
 	readWithCRC bool
 }
 
-var DefaultOptions = &Options{
-	DirPath:     os.TempDir(), // Data drectory
-	FsSync:      true,         // Sync for every write
-	SegmentSize: 20 * MB,      // 20 MB log segment file.
-	CacheSize:   10,           // Size of cached logs in terms of numbers of logs.
+var DefaultOptions = Options{
+	DirPath:     filepath.Join(os.TempDir(), "wal"), // Data drectory
+	FsSync:      true,                               // Sync for every write
+	SegmentSize: 20 * MB,                            // 20 MB log segment file.
+	CacheSize:   50,                                 // Size of cached logs in terms of numbers of logs.
+	BytesToSync: KB,                                 // How many bytes accumlated to call fsync.
+	readWithCRC: true,
 }
 
 type WLog struct {
@@ -285,7 +287,7 @@ func (wal *WLog) IsEmpty() bool {
 	return len(wal.readSegment) == 0 && wal.currentSegment.Size() == 0
 }
 
-func (wal *WLog) GetCurrentLogIndex() uint64 {
+func (wal *WLog) GetLogCount() uint64 {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
 
@@ -517,7 +519,7 @@ func NewSegmentIterator(segment *Segment) *SegmentIterator {
 	return &SegmentIterator{
 		segment:          segment,
 		logCurrentIndex:  segment.logStartIndex,
-		logCurrentOffset: LogHeaderSize,
+		logCurrentOffset: SegHeaderSize,
 	}
 }
 func NewWLogIterator(wal *WLog) *WLogIterator {
@@ -525,6 +527,11 @@ func NewWLogIterator(wal *WLog) *WLogIterator {
 		return nil
 	}
 	var segmentIters []*SegmentIterator
+
+	// First append the current segement.
+	segmentIters = append(segmentIters, NewSegmentIterator(wal.currentSegment))
+
+	// Then append the old segements.
 	for _, segment := range wal.readSegment {
 		segmentIter := NewSegmentIterator(segment)
 		segmentIters = append(segmentIters, segmentIter)
