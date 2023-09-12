@@ -103,8 +103,9 @@ func Open(options Options) (*WLog, error) {
 	}
 
 	wal := &WLog{
-		options: options,
-		path:    options.DirPath,
+		options:     options,
+		path:        options.DirPath,
+		readSegment: make(map[uint64]*Segment),
 	}
 
 	if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
@@ -253,6 +254,13 @@ func (wal *WLog) IsEmpty() bool {
 	defer wal.mu.RUnlock()
 
 	return len(wal.readSegment) == 0 && wal.currentSegment.Size() == 0
+}
+
+func (wal *WLog) GetCurrentLogIndex() uint64 {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+
+	return wal.currentSegment.logCurrentIndex
 }
 
 //Called needs to make sure it is locked.
