@@ -12,7 +12,7 @@ Start log index (8 bytes) | log[i] | log[i+1] | log[i+2] ...
 
 Each log message(the `log[i]` from the above illustration) is encoded as follow:
 ```
-// 8 bytes for the header size in which 4 bytes contribute to the Length of the log data and 4 bytes contribute to the checksum
+// 8 bytes for the header of a log message in which 4 bytes contribute to the Length of the log data and 4 bytes contribute to the checksum
 Length(4 bytes) | Checksum(4 bytes)  | data (any length)
 ```
 
@@ -41,3 +41,4 @@ for {
 ```
 
 # Contact
+For any question or usage, please contact ynjassionchen@gmail.com
