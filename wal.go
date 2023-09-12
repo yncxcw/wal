@@ -91,7 +91,6 @@ type Segment struct {
 	logCurrentIndex  uint64   // The current log index, it always points to the index of the next log to write
 	logCurrentOffset uint64   // The current offset of log.
 	closed           bool     // If the segment is closed or not
-	size             uint32   // The current size of the segment file.
 	fsync            bool     // If true, do fsync for each write.
 }
 
@@ -138,16 +137,13 @@ func Open(options Options) (*WLog, error) {
 			return nil, fmt.Errorf("Get valid segment file %s", entry.Name())
 		}
 
-		fmt.Println("Here ", entry.Name())
 		var segmentId uint64
 		_, err := fmt.Sscanf(entry.Name(), "segment_%d.bin", &segmentId)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Println("Here ", segmentId)
 		segmentIds = append(segmentIds, segmentId)
-		fmt.Println("Iter segment ", segmentId)
 	}
 	if len(segmentIds) == 0 {
 		segment, err := NewSegment(options.DirPath, startSegmentId, 0, options.FsSync)
@@ -159,7 +155,6 @@ func Open(options Options) (*WLog, error) {
 	} else {
 		sort.Slice(segmentIds, func(i, j int) bool { return segmentIds[i] < segmentIds[j] })
 		for i, segmentId := range segmentIds {
-			fmt.Println("Open segment ", segmentId)
 			segment, err := OpenSegment(options.DirPath, segmentId, options.FsSync)
 
 			if err != nil {
@@ -168,6 +163,17 @@ func Open(options Options) (*WLog, error) {
 			if i == len(segmentIds)-1 {
 				wal.currentSegment = segment
 				// For the active segenment, we need to iterate it find the current log index
+				sIter := NewSegmentIterator(wal.currentSegment)
+				for {
+					_, index, err := sIter.Next()
+					if err == io.EOF {
+						wal.currentSegment.logCurrentIndex = index
+						break
+					}
+					if err != nil {
+						return nil, err
+					}
+				}
 			} else {
 				wal.readSegment[segmentId] = segment
 			}
@@ -208,7 +214,6 @@ func NewSegment(segmentFolder string, segmentId uint64, logStartIndex uint64, fs
 		logStartIndex:    logStartIndex,
 		logCurrentIndex:  logStartIndex,
 		logCurrentOffset: SegHeaderSize,
-		size:             0,
 		fsync:            fsync,
 	}, nil
 }
@@ -216,7 +221,7 @@ func NewSegment(segmentFolder string, segmentId uint64, logStartIndex uint64, fs
 // Open existing segments for reading
 func OpenSegment(segmentFolder string, segmentId uint64, fsync bool) (*Segment, error) {
 	segmentPath := SegmentPath(segmentId, segmentFolder)
-	fd, err := os.OpenFile(segmentPath, os.O_RDONLY|os.O_APPEND, fileModePerm)
+	fd, err := os.OpenFile(segmentPath, os.O_RDWR|os.O_APPEND, fileModePerm)
 	if err != nil {
 		return nil, err
 	}
@@ -234,15 +239,16 @@ func OpenSegment(segmentFolder string, segmentId uint64, fsync bool) (*Segment, 
 	if err != nil {
 		return nil, err
 	}
+
 	return &Segment{
-		path:            segmentPath,
-		id:              segmentId,
-		fd:              fd,
-		header:          buf,
-		logStartIndex:   logStartIndex,
-		logCurrentIndex: 0,
-		size:            uint32(stat.Size()),
-		fsync:           fsync,
+		path:             segmentPath,
+		id:               segmentId,
+		fd:               fd,
+		header:           buf,
+		logStartIndex:    logStartIndex,
+		logCurrentIndex:  0,
+		logCurrentOffset: uint64(stat.Size()),
+		fsync:            fsync,
 	}, nil
 }
 
@@ -507,17 +513,20 @@ func SegmentPath(segmentId uint64, segmentFolder string) string {
 	return filepath.Join(segmentFolder, fmt.Sprintf("segment_%d.bin", segmentId))
 }
 
+func NewSegmentIterator(segment *Segment) *SegmentIterator {
+	return &SegmentIterator{
+		segment:          segment,
+		logCurrentIndex:  segment.logStartIndex,
+		logCurrentOffset: LogHeaderSize,
+	}
+}
 func NewWLogIterator(wal *WLog) *WLogIterator {
 	if wal == nil {
 		return nil
 	}
 	var segmentIters []*SegmentIterator
 	for _, segment := range wal.readSegment {
-		segmentIter := &SegmentIterator{
-			segment:          segment,
-			logCurrentIndex:  segment.logStartIndex,
-			logCurrentOffset: LogHeaderSize,
-		}
+		segmentIter := NewSegmentIterator(segment)
 		segmentIters = append(segmentIters, segmentIter)
 	}
 
@@ -546,7 +555,7 @@ func (sIter *SegmentIterator) Next() ([]byte, uint64, error) {
 	log, err := sIter.segment.readSingLog(sIter.logCurrentOffset, true)
 
 	if err != nil {
-		return nil, 0, err
+		return nil, sIter.logCurrentIndex, err
 	}
 
 	defer func() {

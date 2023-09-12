@@ -75,11 +75,14 @@ func TestWLogWriteAndRead(t *testing.T) {
 func TestWLogWriteAndReOpen(t *testing.T) {
 	log := CraeteWLog(10*KB, 0)
 
-	for i := 0; i < 10; i++ {
+	// Firt wrte data to WLog
+	for i := 0; i < 50; i++ {
 		_, err := log.Write(make([]byte, 3*KB))
 		assert.Nil(t, err)
 	}
 	path := log.path
+
+	// Close it
 	log.Close()
 
 	opts := Options{
@@ -91,13 +94,27 @@ func TestWLogWriteAndReOpen(t *testing.T) {
 		readWithCRC: true,
 	}
 
+	// Reopen it for reading and writing
 	log, err := Open(opts)
 	assert.Nil(t, err)
 
-	for i := 0; i < 10; i++ {
+	assert.Equal(t, uint64(50), log.GetCurrentLogIndex())
+	for i := 0; i < 50; i++ {
 		_, err := log.Read(uint64(i))
 		assert.Nil(t, err)
 	}
+
+	// Write 50 more new logs
+	for i := 0; i < 50; i++ {
+		_, err := log.Write(make([]byte, 3*KB))
+		assert.Nil(t, err)
+	}
+	// Read totall 100 logs
+	for i := 0; i < 100; i++ {
+		_, err := log.Read(uint64(i))
+		assert.Nil(t, err)
+	}
+
 	DestryWLog(log)
 }
 
@@ -108,13 +125,11 @@ func TestMultipleSegments(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		buffer := make([]byte, 2*KB-8)
 		logPos, err := log.Write(buffer)
-		fmt.Printf("Writing to segment %d \n", logPos.segmentIndex)
 		assert.Nil(t, err)
 		assert.Equal(t, uint64((i*2)/10), logPos.segmentIndex)
 	}
 
 	for i := 0; i < 20; i++ {
-		fmt.Printf("Reading log index %d \n", i)
 		_, err := log.Read(uint64(i))
 		assert.Nil(t, err)
 		assert.LessOrEqual(t, uint64(i), log.GetCurrentLogIndex())
