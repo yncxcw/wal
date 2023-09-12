@@ -17,7 +17,7 @@ func main() {
 	// Sequential write
 	logger.Write([]byte("hello"))
 	logger.Write([]byte("world"))
-	logger.Write([]byte("writing"))
+	logger.Write([]byte("writting"))
 	logger.Write([]byte("logs"))
 
 	fmt.Printf("There are %d logs \n", logger.GetLogCount())

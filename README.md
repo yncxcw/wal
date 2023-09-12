@@ -23,7 +23,7 @@ logger, err := wal.Open(wal.DefaultOptions)
 // Sequential write
 logger.Write([]byte("hello"))
 logger.Write([]byte("world"))
-logger.Write([]byte("writing"))
+logger.Write([]byte("writting"))
 logger.Write([]byte("logs"))
 
 log, _ := logger.Read(uint64(1))
@@ -36,7 +36,7 @@ for {
 		break
 	}
 
-    // Write your code here to use the log data.
+    // Write your code here to consume the log data.
 }
 ```
 
