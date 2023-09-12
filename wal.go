@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -46,8 +48,8 @@ type Options struct {
 	FsSync bool
 	// Segment size of each Segment.
 	SegmentSize uint64
-	// The maximum number of segments that will be kept in memory.
-	SegmentCacheSize uint64
+	// The maximum number of logs in memory.
+	CacheSize uint64
 	// For writing how many bytes before it syncs.
 	BytesToSync uint64
 	// Read with CRC.
@@ -55,20 +57,21 @@ type Options struct {
 }
 
 var DefaultOptions = &Options{
-	DirPath:          os.TempDir(), // Data drectory
-	FsSync:           true,         // Sync for every write
-	SegmentSize:      20 * MB,      // 20 MB log segment file.
-	SegmentCacheSize: 10,           // number of segments in memory.
+	DirPath:     os.TempDir(), // Data drectory
+	FsSync:      true,         // Sync for every write
+	SegmentSize: 20 * MB,      // 20 MB log segment file.
+	CacheSize:   10,           // Size of cached logs in terms of numbers of logs.
 }
 
 type WLog struct {
-	mu             sync.RWMutex        // Readwrite lock for accessing logs
-	path           string              // Absolute path to the log directory
-	options        Options             // Options of the WLog.
-	currentSegment *Segment            // pints to the current segment
-	readSegment    map[uint64]*Segment // The segments older and currentSegment, read-only
-	closed         bool                // If the log is closed.
-	byteWrittent   int                 // Bytes written before fsync.
+	mu             sync.RWMutex               // Readwrite lock for accessing logs
+	path           string                     // Absolute path to the log directory
+	options        Options                    // Options of the WLog.
+	currentSegment *Segment                   // pints to the current segment
+	readSegment    map[uint64]*Segment        // The segments older and currentSegment, read-only.
+	cache          *lru.Cache[uint64, []byte] // The cache for recent logs.
+	closed         bool                       // If the log is closed.
+	byteWrittent   int                        // Bytes written before fsync.
 }
 
 type Segment struct {
@@ -106,6 +109,10 @@ func Open(options Options) (*WLog, error) {
 		options:     options,
 		path:        options.DirPath,
 		readSegment: make(map[uint64]*Segment),
+	}
+
+	if options.CacheSize > 0 {
+		wal.cache, _ = lru.New[uint64, []byte](int(options.CacheSize))
 	}
 
 	if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
@@ -320,6 +327,12 @@ func (wal *WLog) Write(data []byte) (*LogPosition, error) {
 		}
 	}
 
+	if wal.cache != nil {
+		cacheBuffer := make([]byte, len(data))
+		copy(cacheBuffer, data)
+		wal.cache.Add(position.id, cacheBuffer)
+	}
+
 	return position, err
 }
 
@@ -327,6 +340,12 @@ func (wal *WLog) Read(logIndex uint64) ([]byte, error) {
 	wal.mu.RLock()
 	defer wal.mu.RUnlock()
 
+	//First try to read from cache
+	if wal.cache != nil {
+		if buffer, ok := wal.cache.Get(logIndex); ok {
+			return buffer, nil
+		}
+	}
 	if logIndex >= wal.currentSegment.logStartIndex {
 		return wal.currentSegment.Read(logIndex, wal.options.readWithCRC)
 	} else {

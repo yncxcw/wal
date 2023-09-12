@@ -17,22 +17,22 @@ func DestryWLog(log *WLog) {
 	}
 }
 
-func CraeteWLog(segmentSize uint64) *WLog {
+func CraeteWLog(segmentSize uint64, cacheSize uint64) *WLog {
 	log_folder, _ := os.MkdirTemp("", "log_folder")
 	opts := Options{
-		DirPath:          log_folder,
-		FsSync:           true,
-		SegmentSize:      segmentSize,
-		SegmentCacheSize: KB,
-		BytesToSync:      KB,
-		readWithCRC:      true,
+		DirPath:     log_folder,
+		FsSync:      true,
+		SegmentSize: segmentSize,
+		CacheSize:   cacheSize,
+		BytesToSync: KB,
+		readWithCRC: true,
 	}
 	log, _ := Open(opts)
 	return log
 }
 
 func TestOpenWLogAndWrite(t *testing.T) {
-	log := CraeteWLog(MB)
+	log := CraeteWLog(MB, 0)
 	defer DestryWLog(log)
 
 	logPostion, err := log.Write([]byte("hello"))
@@ -53,7 +53,7 @@ func TestOpenWLogAndWrite(t *testing.T) {
 }
 
 func TestWLogWriteAndRead(t *testing.T) {
-	log := CraeteWLog(MB)
+	log := CraeteWLog(MB, 0)
 	defer DestryWLog(log)
 
 	var str = "abcdefghijklmnopq"
@@ -70,7 +70,7 @@ func TestWLogWriteAndRead(t *testing.T) {
 }
 
 func TestMultipleSegments(t *testing.T) {
-	log := CraeteWLog(10*KB + 8)
+	log := CraeteWLog(10*KB+8, 0)
 	defer DestryWLog(log)
 
 	for i := 0; i < 10; i++ {
@@ -88,7 +88,7 @@ func TestMultipleSegments(t *testing.T) {
 }
 
 func TestMultipleReaderAndWriter(t *testing.T) {
-	log := CraeteWLog(10 * MB)
+	log := CraeteWLog(10*MB, 0)
 	defer DestryWLog(log)
 
 	// Writing goroutins
@@ -122,4 +122,12 @@ func TestMultipleReaderAndWriter(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestE2E(t *testing.T) {
+
+}
+
+func TestE2EWitchCache(t *testing.T) {
+
 }
