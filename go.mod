@@ -1,4 +1,4 @@
-module example.com/wal
+module github.com/yncxcw/wal
 
 go 1.18
 
