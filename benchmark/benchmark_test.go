@@ -56,6 +56,8 @@ func BenchmarkWrite10bytes(t *testing.B) {
 	}
 }
 
+// It seems that random read is faster than sequential read.
+// TODO: This needs to be investigated.
 func BenchmarkRandRead100K(t *testing.B) {
 	logger := Setup()
 	defer Destroy(logger)
