@@ -7,7 +7,7 @@ The log is organized as a list of segment files. Each segment file is capped by 
 Each segment file is encoded as follow:
 ```
 // 8 bytes for the header of a segment file, it encodes the starting log index of this segment file.
-Start log index (8 bytes) | log[i] | log[i+1] | log[i+2] ...
+Start log index (8 bytes, `i` in this case) | log[i] | log[i+1] | log[i+2] ...
 ```
 
 Each log message(the `log[i]` from the above illustration) is encoded as follow:

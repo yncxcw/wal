@@ -311,6 +311,12 @@ func (wal *WLog) sync() error {
 	return nil
 }
 
+func (wal *WLog) Path() string {
+	wal.mu.RLock()
+	defer wal.mu.RUnlock()
+	return wal.path
+}
+
 func (wal *WLog) Write(data []byte) (*LogPosition, error) {
 	wal.mu.Lock()
 	defer wal.mu.Unlock()
